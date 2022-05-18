@@ -1,60 +1,100 @@
+
 import datetime
 import requests
-from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
-from rest_framework import viewsets, filters, generics
+from rest_framework import filters, generics
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.utils import timezone
+from django.contrib.auth.models import User
+from rest_framework import permissions
+
  
 from .models import *
 from .serializer import *
 from .part.last_day import add_total
+from .part.permissions import IsOwnerOrReadOnly, IsAuthor
+
+class TimeDetail(generics.RetrieveUpdateDestroyAPIView):
+    """ Delete and Update time """
+
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
+    queryset = Time.objects.all()
+    serializer_class = TimeSerializer
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
+
+class TimeList(generics.ListCreateAPIView):
+    """ Time list and create new time"""
+    permission_classes = [IsAuthor]
+   
+    serializer_class = TimeSerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['datetime_add',]
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
+
+    def get_queryset(self):
+        return Time.objects.filter(owner=self.request.user)
+      
+
+class UserList(generics.ListAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
 
 
-@api_view(['GET', 'POST'])
-def time_list(request):
-    """
-    List all code time, or create a new time.
-    """
-    if request.method == 'GET':
-        snippets = Time.objects.all()
-        serializer = TimeSerializer(snippets, many=True)
-        return Response(serializer.data)
+class UserDetail(generics.RetrieveAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
 
-    elif request.method == 'POST':
-        serializer = TimeSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-@api_view(['GET', 'POST'])
-def total_list(request):
+class TotaleList(generics.ListCreateAPIView):
     """
     List all code total, or create a new total.
-    """
-    if request.method == 'GET':
-        snippets = Totale.objects.all()
-        serializer = TotalSerializer(snippets, many=True)
-        return Response(serializer.data)
 
-    elif request.method == 'POST':
-        serializer = TotalSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    """
+    permission_classes = [IsAuthor]
+    
+    serializer_class = TotalSerializer
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
+    
+    def get_queryset(self):
+        return Totale.objects.filter(owner=self.request.user)
 
-@api_view(['GET'])
-def sum_time(request):
+class TotaleDetail(generics.RetrieveUpdateDestroyAPIView):
     """
-    List all code time, or create a new time.
+    PUT code total, or DELETE a  total.
     """
-    if request.method == 'GET':
-        snippets = Time.objects.all()
-       
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly, IsOwnerOrReadOnly]
+    queryset = Totale.objects.all()
+    serializer_class = TotalSerializer
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
+
+class RegisterView(generics.ListCreateAPIView):
+    """ Registration new 'User' """
+    queryset = User.objects.all()
+    serializer_class = RegisterSerializer
+             
+
+class SunTimeList(generics.ListAPIView):
+    
+    permission_classes = [IsAuthor]
+    serializer_class = TimeSerializer
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
+    
+    def get_queryset(self):
+        return Time.objects.filter(owner=self.request.user)
+
+    def get(self, request):
+        """
+        List all code time, return sum totale time from user request
+        """
+        snippets = Time.objects.filter(owner=self.request.user)
         now = timezone.now()
         year_month = datetime.datetime.strftime(now,'%m-%Y') # date now 
         total = 0
@@ -62,63 +102,9 @@ def sum_time(request):
             data_add = datetime.datetime.strftime(time.datetime_add,'%m-%Y')
             if data_add == year_month:
                 total += time.ore_lavorative
-           
-        print(total)
-        serializer = TimeSerializer(snippets, many=True)
-       
+
         return Response(total)
-
-@api_view(['GET','PUT', 'DELETE'])
-def time_detail(request, pk):
-    """
-    Retrieve, update or delete a code snippet.
-    """
-    try:
-        snippet = Time.objects.get(pk=pk)
-    except Time.DoesNotExist:
-        return Response(status=status.HTTP_404_NOT_FOUND)
-
-    if request.method == 'GET':
-        serializer = TimeSerializer(snippet)
-        return Response(serializer.data)
-
-    elif request.method == 'PUT':
-        serializer = TimeSerializer(snippet, data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    elif request.method == 'DELETE':
-        snippet.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-@api_view(['GET','PUT', 'DELETE'])
-def totale_detail(request, pk):
-    """
-    Retrieve, update or delete a code snippet.
-    """
-    try:
-        snippet = Totale.objects.get(pk=pk)
-    except Totale.DoesNotExist:
-        return Response(status=status.HTTP_404_NOT_FOUND)
-
-    if request.method == 'GET':
-        serializer = TotalSerializer(snippet)
-        return Response(serializer.data)
-
-    elif request.method == 'PUT':
-        serializer = TotalSerializer(snippet, data=request.data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    elif request.method == 'DELETE':
-        snippet.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
+      
 @api_view(['GET'])
 def check_last_day_for_month(request):
     if request.method == 'GET':
@@ -130,9 +116,9 @@ def check_last_day_for_month(request):
             return Response("Not add tatale month")
 
 
-class TimeListView(generics.ListAPIView):
-    queryset = Time.objects.all()
-    serializer_class = TimeSerializer
-    filter_backends = [filters.SearchFilter]
-    search_fields = ['datetime_add',]
+#class TimeListView(generics.ListAPIView):
+ #   queryset = Time.objects.all()
+  #  serializer_class = TimeSerializer
+   # filter_backends = [filters.SearchFilter]
+   # search_fields = ['datetime_add',]
 
