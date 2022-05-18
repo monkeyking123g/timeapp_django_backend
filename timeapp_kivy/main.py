@@ -1,4 +1,5 @@
 # import tutte file.py
+import requests
 from db_conect import *
 from screen_home import Windowferst
 from screen_two import WindowSecond
@@ -11,6 +12,7 @@ from kivymd.app import MDApp
 from datetime import datetime
 from kivy.uix.screenmanager import  Screen
 from kivy.uix.boxlayout import BoxLayout
+from kivy.core.window import Window
 
 
 
@@ -25,7 +27,6 @@ class Windowfrie(Screen):
 class Test(MDApp):
     dialog = None
     dialog_houre = None
-    dialog_error = None
     date_now = datetime.now()
 
     def build(self):
@@ -33,7 +34,52 @@ class Test(MDApp):
         self.theme_cls.theme_style = "Light"
         
         return Builder.load_file('main.kv')
+    
+    def logger(self):
+        try:
+            post = get_login(self.root.ids.user.text, self.root.ids.password.text)
+        
+            print(post)
+            if post["login"].status_code == 200:
+                self.root.ids.welcome_label.text = f'Hai {self.root.ids.user.text}'
+                self.root.ids['screens'].current = "ferst"
+            else:
+                self.root.ids.welcome_label.text = 'Riprova'
+        except requests.exceptions.ConnectionError:
+            self.root.ids.welcome_label.text = "no internet connection"
+    def sign_in_register(self):
+        get = requests.post("http://127.0.0.1:8000/register/", json={"username":self.root.ids.username.text,
+                                                                    "password":self.root.ids.password_register.text,
+                                                                    "password2":self.root.ids.password_register_2.text,
+                                                                    "email": self.root.ids.email.text})
+        print(get.status_code)
+        if get.status_code == 201:
+            print("ok")
+            self.root.ids['screens'].current = "login"
+        else:
+            if len(self.root.ids.password_register.text) < 7:
+                self.root.ids.register.text = 'Password min 8 simboli'
+            else:
+                self.root.ids.register.text = 'Riprova'
 
+    def screen_home(self):
+        self.root.ids['screens'].current = "ferst"
+
+    def sign_in(self):
+        self.root.ids['screens'].current = "sign in"
+
+    def back(self):
+        self.root.ids['screens'].current = "login"
+
+    def screen_time(self):
+        self.root.ids['screens'].current = "for"
+        self.restart_screen_time()
+
+    def screen_totale(self):
+        self.root.ids['screens'].current = "frie"
+        self.restart_totale_month()
+
+     
     def on_swipe_complete(self, instance):
         '''Delete widget and time of sql '''
         delete = delete_time(instance.id_tempo)
@@ -69,33 +115,26 @@ class Test(MDApp):
         return self.stop()    
 
     def on_start(self):
-        try:
-            check = check_day_add_month()
-            totale = get_totale()
-            nam = 0
-            for data in totale:
-                nam += 1
-                self.root.ids.md_list.add_widget(
-                    SwipeToDeleteItemMonth(text=f'{str(nam)}.  {(data["datetime_add"][:7])} totale  {str(data["total_ore"])} ore', id_total_month=data['id'])
-                )
-            self.restart_screen_time()
-             
-        except:
-            self.dialog_error = MDDialog(
-                text="Oops! Nou internet connect!",
-               radius=[20, 7, 20, 7],
-                 buttons=[
-                    MDFlatButton(
-                        text="RESTART", text_color=self.theme_cls.primary_color,on_release=self.restart_app
-                    ),
-                    MDFlatButton(
-                        text="EXIT", text_color=self.theme_cls.primary_color, on_release=self.stop_app
-                    ),
-                ],
+        """ Append list time and totale """
+        check = check_day_add_month()
+
+    def restart_totale_month(self):
+        """ Restart screen totale """
+        for i in  range(len(self.root.ids.md_list.children)):
+            for widget in self.root.ids.md_list.children:
+                self.root.ids.md_list.remove_widget(widget)
+
+        totale = get_totale()
+        nam = 0
+        for data in totale:
+            nam += 1
+            self.root.ids.md_list.add_widget(
+                SwipeToDeleteItemMonth(text=f'{str(nam)}.  {(data["datetime_add"][:7])} totale  {str(data["total_ore"])} ore', id_total_month=data['id'])
             )
-          
-           # self.dialog_error.open()
+      
+              
     def restart_screen_time(self):
+        """ Restart screen time """
         # delete widget from screen 
         for i in  range(len(self.root.ids.md_list_all.children)):
             for widget in self.root.ids.md_list_all.children:
